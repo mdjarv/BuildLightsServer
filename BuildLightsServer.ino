@@ -18,6 +18,16 @@ int values[4];
 
 uint32_t pixels[NUM_PIXELS];
 
+void clearPixels()
+{
+  for(int i = 0; i < NUM_PIXELS; i++)
+  {
+    pixels[i] = 0;
+  }
+  
+  updatePixels();
+}
+
 void flashColor(uint32_t color)
 {
   for(int i = 0; i < NUM_PIXELS; i++)
@@ -35,6 +45,7 @@ void flashColor(uint32_t color)
   }
 
   ring.show();
+  
 }
 
 void setup() {
@@ -49,6 +60,7 @@ void setup() {
   Serial.println(Ethernet.localIP());
   
   flashColor(ring.Color(0, 255, 0));
+  clearPixels();
 }
 
 void loop() {
@@ -119,12 +131,7 @@ void processRequest()
   {  
     if(request == "clear")
     {
-      memset(values, 0, sizeof(values));
-      for(int i = 0; i < NUM_PIXELS; i++)
-      {
-        ring.setPixelColor(i, ring.Color(0,0,0));
-      }
-      ring.show();
+      clearPixels();
     }
     else if(request == "flashGreen")
     {
