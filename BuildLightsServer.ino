@@ -28,6 +28,8 @@ void setup()
   
   Ethernet.begin(mac);
   server.begin();
+  
+  pulsePixels(0, 128,0);
 }
 
 void loop()
@@ -91,12 +93,17 @@ void allPixelsParser(String *values, int valueCount)
 
 void pulsePixelsParser(String *values, int valueCount)
 {
-  int steps = 50;
-  int fadeDelay = 20;
-
   uint8_t red = values[1].toInt();
   uint8_t green = values[2].toInt();
   uint8_t blue = values[3].toInt();
+  
+  pulsePixels(red, green, blue);
+}
+
+void pulsePixels(uint8_t red, uint8_t green, uint8_t blue)
+{
+  int steps = 50;
+  int fadeDelay = 20;
   
   for(int i = 0; i < steps; i++)
   {
