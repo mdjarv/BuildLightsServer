@@ -6,6 +6,7 @@
 #define NUM_PIXELS 16
 #define FADE_STEPS 50
 #define FADE_DELAY 20
+#define SWIRL_DELAY 50
 
 SerialDataParser sdp('^', '$', ',');
 EthernetServer server = EthernetServer(1000);
@@ -23,10 +24,12 @@ void setup()
   uint8_t mac[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 
   sdp.addParser("pixel", singlePixelParser);
-  sdp.addParser("all", allPixelsParser);
+//  sdp.addParser("all", allPixelsParser);
   sdp.addParser("clear", clearPixelsParser);
   sdp.addParser("pulse", pulsePixelsParser);
-  sdp.addParser("flash", flashPixelsParser);
+//  sdp.addParser("flash", flashPixelsParser);
+  sdp.addParser("swirl", swirlPixelsParser);
+  sdp.addParser("shift", shiftPixelsParser);
   
   Ethernet.begin(mac);
   server.begin();
@@ -66,12 +69,16 @@ void singlePixelParser(String *values, int valueCount)
 
 void clearPixelsParser(String *values, int valueCount)
 {
+  clearPixels();  
+  updatePixels();
+}
+
+void clearPixels()
+{
   for(int i = 0; i < NUM_PIXELS; i++)
   {
     pixels[i] = 0;
   }
-  
-  updatePixels();
 }
 
 void allPixelsParser(String *values, int valueCount)
@@ -155,6 +162,52 @@ void flashPixelsParser(String *values, int valueCount)
     updatePixels();
     delay(200);
   }
+}
+
+void swirlPixelsParser(String *values, int valueCount)
+{
+  if(valueCount != 5)
+    return;
+
+  uint32_t color = neopixel.Color(values[2].toInt(), values[3].toInt(), values[4].toInt());
+
+  for(int i = 0; i < NUM_PIXELS; i++)
+  {
+    neopixel.setPixelColor(i, 0);
+  }
+  
+  for(int i = 0; i < values[1].toInt(); i++)
+  {
+    for(int p = 0; p < NUM_PIXELS; p++)
+    {
+      int p2 = (p + (NUM_PIXELS/2)) % NUM_PIXELS;
+      
+      for(int j = 0; j < NUM_PIXELS; j++)
+      {
+        neopixel.setPixelColor(j, 0);
+      }
+      
+      neopixel.setPixelColor(p, color);
+      neopixel.setPixelColor(p2 % NUM_PIXELS, color);
+
+      neopixel.show();
+      delay(SWIRL_DELAY);
+    }
+  }
+  updatePixels();
+}
+
+void shiftPixelsParser(String *values, int valueCount)
+{
+  uint32_t c = pixels[0];
+  
+  for(int i = 0; i < NUM_PIXELS-1; i++)
+  {
+    pixels[i] = pixels[i+1];
+  }
+  pixels[NUM_PIXELS-1] = c;
+  
+  updatePixels();
 }
 
 void updatePixels()
