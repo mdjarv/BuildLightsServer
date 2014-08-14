@@ -1,24 +1,69 @@
 #include <SPI.h>
 #include <UIPEthernet.h>
+#include <SerialDataParser.h>
 #include <Adafruit_NeoPixel.h>
 
 #define NUM_PIXELS 16
 
-Adafruit_NeoPixel ring = Adafruit_NeoPixel(NUM_PIXELS, 4, NEO_GRB + NEO_KHZ800);
-
-byte mac[] = {
-  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
-};
-
-EthernetServer server(80);
-
-String request;
-bool doAppend = false;
-int values[4];
+SerialDataParser sdp('^', '$', ',');
+EthernetServer server = EthernetServer(1000);
+Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(NUM_PIXELS, 4, NEO_GRB + NEO_KHZ800);
 
 uint32_t pixels[NUM_PIXELS];
 
-void clearPixels()
+void setup()
+{
+  Serial.begin(9600);
+  
+  neopixel.begin();
+  neopixel.show();
+
+  uint8_t mac[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
+
+  sdp.addParser("pixel", singlePixelParser);
+  sdp.addParser("all", allPixelsParser);
+  sdp.addParser("clear", clearPixelsParser);
+  sdp.addParser("pulse", pulsePixelsParser);
+  sdp.addParser("flash", flashPixelsParser);
+  
+  Ethernet.begin(mac);
+  server.begin();
+}
+
+void loop()
+{
+  size_t size;
+
+  if (EthernetClient client = server.available())
+    {
+      while((size = client.available()) > 0)
+        {
+          uint8_t* msg = (uint8_t*)malloc(size);
+          size = client.read(msg,size);
+          for(int i = 0; i < size; i++)
+          {
+            sdp.appendChar(msg[i]);
+          }
+          free(msg);
+        }
+      client.println("OK");
+      client.stop();
+    }
+}
+
+void singlePixelParser(String *values, int valueCount)
+{
+  if(valueCount != 5)
+  {
+    return;
+  }
+  
+  pixels[values[1].toInt()] = neopixel.Color(values[2].toInt(), values[3].toInt(), values[4].toInt());
+
+  updatePixels();
+}
+
+void clearPixelsParser(String *values, int valueCount)
 {
   for(int i = 0; i < NUM_PIXELS; i++)
   {
@@ -28,154 +73,94 @@ void clearPixels()
   updatePixels();
 }
 
-void flashColor(uint32_t color)
+void allPixelsParser(String *values, int valueCount)
 {
-  for(int i = 0; i < NUM_PIXELS; i++)
+  if(valueCount != 4)
   {
-    ring.setPixelColor(i, color);
-  }
-
-  ring.show();
-
-  delay(200);
-
-  for(int i = 0; i < NUM_PIXELS; i++)
-  {
-    ring.setPixelColor(i, pixels[i]);
-  }
-
-  ring.show();
-  
-}
-
-void setup() {
-  Serial.begin(9600);
-  
-  ring.begin();
-  ring.show();
-
-  Ethernet.begin(mac);
-  server.begin();
-  Serial.print("Server has IP ");
-  Serial.println(Ethernet.localIP());
-  
-  flashColor(ring.Color(0, 255, 0));
-  clearPixels();
-}
-
-void loop() {
-  EthernetClient client = server.available();
-  if (client) {
-    boolean currentLineIsBlank = true;
-    while (client.connected()) {
-      if (client.available()) {
-        char c = client.read();
-        if(c == '?')
-          doAppend = true;
-        else if(c == ' ')
-          doAppend = false;
-        else if(doAppend)
-          request += c;
-          
-        if (c == '\n' && currentLineIsBlank) {
-          processRequest();
-          char hexCol[10];
-          sprintf(hexCol, "%02x%02x%02x", values[1], values[2], values[3]);
-
-          client.println("HTTP/1.1 200 OK");
-          client.println("Content-Type: text/html");
-          client.println("Connection: close");
-          client.println();
-          client.println("<!DOCTYPE HTML>");
-          client.println("<html>");
-          client.println("<body>");
-          client.print("LED ");
-          client.print(values[0]);
-          client.print(" set to color <span style=\"color: #");
-          client.print(hexCol);
-          client.print("\">#");
-          client.print(hexCol);
-          client.println("</span>");
-
-
-          client.println("</body>");
-          client.println("</html>");
-          
-          request = "";
-          
-          break;
-        }
-        if (c == '\n') {
-          currentLineIsBlank = true;
-        }
-        else if (c != '\r') {
-          currentLineIsBlank = false;
-        }
-      }
-    }
-    delay(1);
-
-    client.stop();
-    Serial.println("Client disconnected");
-  }
-}
-
-void processRequest()
-{
-  Serial.print("request: ");
-  Serial.println(request);
-  
-  int valueIndex = 0;
-
-  if(request.indexOf(',') < 0)
-  {  
-    if(request == "clear")
-    {
-      clearPixels();
-    }
-    else if(request == "flashGreen")
-    {
-      flashColor(ring.Color(0, 255, 0));
-    }
-    else if(request == "flashRed")
-    {
-      flashColor(ring.Color(255, 0, 0));
-    }
     return;
   }
-
-  int i = 0;
-  int delim = request.indexOf(',', i);
   
-  while(true)
+  uint32_t color = neopixel.Color(values[1].toInt(), values[2].toInt(), values[3].toInt());
+  for(int i = 0; i < NUM_PIXELS; i++)
   {
-    if(delim > 0)
-    {
-      values[valueIndex++] = request.substring(i, delim).toInt();
-      
-      i = delim+1;
-      delim = request.indexOf(',', i);
-    }
-    else
-    {
-      values[valueIndex++] = request.substring(i).toInt();
-      break;
-    }
-  
-    if(valueIndex == 4)
-      break;
+    pixels[i] = color;
   }
   
-  pixels[values[0]] = ring.Color(values[1], values[2], values[3]);
+  updatePixels();
+}
+
+void pulsePixelsParser(String *values, int valueCount)
+{
+  int steps = 50;
+  int fadeDelay = 20;
+
+  uint8_t red = values[1].toInt();
+  uint8_t green = values[2].toInt();
+  uint8_t blue = values[3].toInt();
+  
+  for(int i = 0; i < steps; i++)
+  {
+    uint8_t fadeRed = map(i, 0, steps, 0, red);
+    uint8_t fadeGreen = map(i, 0, steps, 0, green);
+    uint8_t fadeBlue = map(i, 0, steps, 0, blue);
+    
+    uint32_t color = neopixel.Color(fadeRed, fadeGreen, fadeBlue);
+
+    for(int p = 0; p < NUM_PIXELS; p++)
+    {
+      neopixel.setPixelColor(p, color);
+    }
+    neopixel.show();
+    delay(fadeDelay);
+  }
+
+  for(int i = steps; i > 0; i--)
+  {
+    uint8_t fadeRed = map(i, 0, steps, 0, red);
+    uint8_t fadeGreen = map(i, 0, steps, 0, green);
+    uint8_t fadeBlue = map(i, 0, steps, 0, blue);
+    
+    uint32_t color = neopixel.Color(fadeRed, fadeGreen, fadeBlue);
+    for(int p = 0; p < NUM_PIXELS; p++)
+    {
+      neopixel.setPixelColor(p, color);
+    }
+    neopixel.show();
+    delay(fadeDelay);
+  }
   
   updatePixels();
+}
+
+void flashPixelsParser(String *values, int valueCount)
+{
+  if(valueCount != 5)
+  {
+    return;
+  }
+  
+  uint32_t color = neopixel.Color(values[2].toInt(), values[3].toInt(), values[4].toInt());
+  
+  for(int t = 0; t < values[1].toInt(); t++)
+  {
+    for(int i = 0; i < NUM_PIXELS; i++)
+    {
+      neopixel.setPixelColor(i, color);
+    }
+  
+    neopixel.show();
+  
+    delay(200);
+    updatePixels();
+    delay(200);
+  }
 }
 
 void updatePixels()
 {
   for(int i = 0; i < NUM_PIXELS; i++)
   {
-    ring.setPixelColor(i, pixels[i]);
+    neopixel.setPixelColor(i, pixels[i]);
   }
-  ring.show();
+  neopixel.show();
 }
