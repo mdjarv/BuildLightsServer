@@ -4,6 +4,8 @@
 #include <Adafruit_NeoPixel.h>
 
 #define NUM_PIXELS 16
+#define FADE_STEPS 50
+#define FADE_DELAY 20
 
 SerialDataParser sdp('^', '$', ',');
 EthernetServer server = EthernetServer(1000);
@@ -14,7 +16,7 @@ uint32_t pixels[NUM_PIXELS];
 void setup()
 {
   Serial.begin(9600);
-  
+
   neopixel.begin();
   neopixel.show();
 
@@ -29,7 +31,9 @@ void setup()
   Ethernet.begin(mac);
   server.begin();
   
-  pulsePixels(0, 128,0);
+  Serial.println(Ethernet.localIP());
+  
+  pulsePixels(0, 64,0);
 }
 
 void loop()
@@ -38,18 +42,13 @@ void loop()
 
   if (EthernetClient client = server.available())
     {
-      while((size = client.available()) > 0)
-        {
-          uint8_t* msg = (uint8_t*)malloc(size);
-          size = client.read(msg,size);
-          for(int i = 0; i < size; i++)
-          {
-            sdp.appendChar(msg[i]);
-          }
-          free(msg);
-        }
-      client.println("OK");
-      client.stop();
+      while(client.available() > 0)
+      {
+        char c = client.read();
+        Serial.print(c);
+        sdp.appendChar(c);
+      }
+      Serial.println();
     }
 }
 
@@ -102,30 +101,25 @@ void pulsePixelsParser(String *values, int valueCount)
 
 void pulsePixels(uint8_t red, uint8_t green, uint8_t blue)
 {
-  int steps = 50;
-  int fadeDelay = 20;
-  
-  for(int i = 0; i < steps; i++)
+  for(int i = 0; i < FADE_STEPS; i++)
   {
-    uint8_t fadeRed = map(i, 0, steps, 0, red);
-    uint8_t fadeGreen = map(i, 0, steps, 0, green);
-    uint8_t fadeBlue = map(i, 0, steps, 0, blue);
-    
-    uint32_t color = neopixel.Color(fadeRed, fadeGreen, fadeBlue);
+    uint32_t color = neopixel.Color(map(i, 0, FADE_STEPS, 0, red),
+                                    map(i, 0, FADE_STEPS, 0, green),
+                                    map(i, 0, FADE_STEPS, 0, blue));
 
     for(int p = 0; p < NUM_PIXELS; p++)
     {
       neopixel.setPixelColor(p, color);
     }
     neopixel.show();
-    delay(fadeDelay);
+    delay(FADE_DELAY);
   }
 
-  for(int i = steps; i > 0; i--)
+  for(int i = FADE_STEPS; i > 0; i--)
   {
-    uint8_t fadeRed = map(i, 0, steps, 0, red);
-    uint8_t fadeGreen = map(i, 0, steps, 0, green);
-    uint8_t fadeBlue = map(i, 0, steps, 0, blue);
+    uint8_t fadeRed = map(i, 0, FADE_STEPS, 0, red);
+    uint8_t fadeGreen = map(i, 0, FADE_STEPS, 0, green);
+    uint8_t fadeBlue = map(i, 0, FADE_STEPS, 0, blue);
     
     uint32_t color = neopixel.Color(fadeRed, fadeGreen, fadeBlue);
     for(int p = 0; p < NUM_PIXELS; p++)
@@ -133,7 +127,7 @@ void pulsePixels(uint8_t red, uint8_t green, uint8_t blue)
       neopixel.setPixelColor(p, color);
     }
     neopixel.show();
-    delay(fadeDelay);
+    delay(FADE_DELAY);
   }
   
   updatePixels();
