@@ -1,15 +1,18 @@
 #include <SPI.h>
 #include <UIPEthernet.h>
+#include <LinkedList.h>
 #include <SerialDataParser.h>
 #include <Adafruit_NeoPixel.h>
 
-#define NUM_PIXELS 16
+#define PORT 1000
+
+#define NUM_PIXELS 60
 #define FADE_STEPS 50
 #define FADE_DELAY 20
 #define SWIRL_DELAY 50
 
 SerialDataParser sdp('^', '$', ',');
-EthernetServer server = EthernetServer(1000);
+EthernetServer server = EthernetServer(PORT);
 Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(NUM_PIXELS, 4, NEO_GRB + NEO_KHZ800);
 
 uint32_t pixels[NUM_PIXELS];
@@ -24,13 +27,13 @@ void setup()
   uint8_t mac[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 
   sdp.addParser("pixel", singlePixelParser);
-//  sdp.addParser("all", allPixelsParser);
+  sdp.addParser("all", allPixelsParser);
   sdp.addParser("clear", clearPixelsParser);
   sdp.addParser("pulse", pulsePixelsParser);
-//  sdp.addParser("flash", flashPixelsParser);
+  sdp.addParser("flash", flashPixelsParser);
   sdp.addParser("swirl", swirlPixelsParser);
   sdp.addParser("shift", shiftPixelsParser);
-  
+  Serial.println(F("Starting up network"));
   Ethernet.begin(mac);
   server.begin();
   
@@ -55,19 +58,19 @@ void loop()
     }
 }
 
-void singlePixelParser(String *values, int valueCount)
+void singlePixelParser(char **values, int valueCount)
 {
   if(valueCount != 5)
   {
     return;
   }
   
-  pixels[values[1].toInt()] = neopixel.Color(values[2].toInt(), values[3].toInt(), values[4].toInt());
+  pixels[atoi(values[1])] = neopixel.Color(atoi(values[2]), atoi(values[3]), atoi(values[4]));
 
   updatePixels();
 }
 
-void clearPixelsParser(String *values, int valueCount)
+void clearPixelsParser(char **values, int valueCount)
 {
   clearPixels();  
   updatePixels();
@@ -81,14 +84,14 @@ void clearPixels()
   }
 }
 
-void allPixelsParser(String *values, int valueCount)
+void allPixelsParser(char **values, int valueCount)
 {
   if(valueCount != 4)
   {
     return;
   }
   
-  uint32_t color = neopixel.Color(values[1].toInt(), values[2].toInt(), values[3].toInt());
+  uint32_t color = neopixel.Color(atoi(values[1]), atoi(values[2]), atoi(values[3]));
   for(int i = 0; i < NUM_PIXELS; i++)
   {
     pixels[i] = color;
@@ -97,11 +100,11 @@ void allPixelsParser(String *values, int valueCount)
   updatePixels();
 }
 
-void pulsePixelsParser(String *values, int valueCount)
+void pulsePixelsParser(char **values, int valueCount)
 {
-  uint8_t red = values[1].toInt();
-  uint8_t green = values[2].toInt();
-  uint8_t blue = values[3].toInt();
+  uint8_t red = atoi(values[1]);
+  uint8_t green = atoi(values[2]);
+  uint8_t blue = atoi(values[3]);
   
   pulsePixels(red, green, blue);
 }
@@ -140,16 +143,16 @@ void pulsePixels(uint8_t red, uint8_t green, uint8_t blue)
   updatePixels();
 }
 
-void flashPixelsParser(String *values, int valueCount)
+void flashPixelsParser(char **values, int valueCount)
 {
   if(valueCount != 5)
   {
     return;
   }
   
-  uint32_t color = neopixel.Color(values[2].toInt(), values[3].toInt(), values[4].toInt());
+  uint32_t color = neopixel.Color(atoi(values[2]), atoi(values[3]), atoi(values[4]));
   
-  for(int t = 0; t < values[1].toInt(); t++)
+  for(int t = 0; t < atoi(values[1]); t++)
   {
     for(int i = 0; i < NUM_PIXELS; i++)
     {
@@ -164,19 +167,19 @@ void flashPixelsParser(String *values, int valueCount)
   }
 }
 
-void swirlPixelsParser(String *values, int valueCount)
+void swirlPixelsParser(char **values, int valueCount)
 {
   if(valueCount != 5)
     return;
 
-  uint32_t color = neopixel.Color(values[2].toInt(), values[3].toInt(), values[4].toInt());
+  uint32_t color = neopixel.Color(atoi(values[2]), atoi(values[3]), atoi(values[4]));
 
   for(int i = 0; i < NUM_PIXELS; i++)
   {
     neopixel.setPixelColor(i, 0);
   }
   
-  for(int i = 0; i < values[1].toInt(); i++)
+  for(int i = 0; i < atoi(values[1]); i++)
   {
     for(int p = 0; p < NUM_PIXELS; p++)
     {
@@ -197,7 +200,7 @@ void swirlPixelsParser(String *values, int valueCount)
   updatePixels();
 }
 
-void shiftPixelsParser(String *values, int valueCount)
+void shiftPixelsParser(char **values, int valueCount)
 {
   uint32_t c = pixels[0];
   
